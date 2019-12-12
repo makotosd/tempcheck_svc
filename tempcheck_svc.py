@@ -1,8 +1,7 @@
 # coding utf-8
 import requests
-from flask import Flask
+from flask import Flask, jsonify, request
 import datetime
-import jsonify
 import dateutil.parser
 from enum import Enum
 class TempState(Enum):
@@ -12,16 +11,25 @@ class TempState(Enum):
 
 LOW_TEMP = 22
 HIGH_TEMP = 35
+MSG_LOW = "Temperature is too LOW. "
+MSG_HIGH = "Temperature is too HIGH. "
+MSG_NOM = "Temperature return to NORMAL. "
+
 app = Flask(__name__)
 
 
 @app.route('/check_temp', methods=['GET'])
 def check_temp():
-    # 温度履歴を取得
-    response = requests.get(
-        'http://192.168.1.100:8081/m2x_temperature'
-    )
-    response_json = response.json()
+    # テストデータの受取
+    response_json = request.get_json()
+
+    if response_json is None:
+        # 温度履歴を取得
+        response = requests.get(
+            'http://192.168.1.100:8081/m2x_temperature'
+        )
+        response_json = response.json()
+
     values = response_json['values']
 
     # 温度履歴をもとに、メッセージを作成
@@ -31,29 +39,39 @@ def check_temp():
     }
     return jsonify(ret)
 
+
 # 温度履歴をもとに、メッセージを返す
 def message_gen(values):
     now = datetime.datetime.now()
 
-    (f_last_value_is_edge, previous_edge, edge_message) = last_value_is_edge(values)
-    (f_wrong_range, wrong_range_begin, periodic_message) = wrong_range(values)
-    if f_last_value_is_edge is True:
-        if now - previous_edge > datetime.timedelta(hours=1) :
+    (f_last_value_is_edge, edge_message) = last_value_is_edge(values)
+    c_state = state_temp(float(values[0]['value']))
+    if f_last_value_is_edge is True:  # 状態遷移があった場合
+        edge_list = gen_edge_list(values)
+        edge_duration = dateutil.parser(edge_list[0]['timestamp']) - dateutil.parser(edge_list[1]['timestamp'])
+        if edge_duration > datetime.timedelta(hours=1) : # 前回の状態遷移から1時間以上空いていた場合
             return edge_message
-    elif f_wrong_range is True:
+    elif c_state is not TempState.NORMAL:       # 異常状態にいる場合
+        duration = wrong_range_duration(values)
         onehour = datetime.timedelta(hours=1)
-        duration = now - wrong_range_begin
         if (duration % onehour) < datetime.timedelta(minutes=8):
-            return periodic_message
+            if c_state is TempState.LOW:
+                return MSG_LOW + "{%.2f}C".float(values[0]['value'])
+            elif c_state is TempState.HIGH:
+                return MSG_HIGH + "{%.2f}C".float(values[0]['value'])
+            else:
+                return "ERROR: 2000"
     else:
         return None
 
-
 # 不正な状態にどれだけ継続しているか？
 #
-def wrong_range(values):
-    msg = ""
-    return True, datetime.datetime.now(), msg
+def wrong_range_duration(values):
+    now = datetime.datetime.now()
+    for v in values:
+        state = state_temp(float(v['value']))
+        if state is TempState.NORMAL:
+            return now - dateutil.parser(v['timestamp'])
 
 # 温度状態に関する標準関数軍
 def low_temp(temp):
@@ -61,11 +79,11 @@ def low_temp(temp):
 def high_temp(temp):
     return temp > HIGH_TEMP
 def normal_temp(temp):
-    return LOW_TEMP <= temp && temp <= HIGH_TEMP
-def state_temp(temp)
+    return LOW_TEMP <= temp and temp <= HIGH_TEMP
+def state_temp(temp):
     if temp < LOW_TEMP:
         return TempState.LOW
-    elif temp > HIGH_TEMP
+    elif temp > HIGH_TEMP:
         return TempState.HIGH
     else:
         return TempState.NORMAL
@@ -75,9 +93,21 @@ def state_temp(temp)
 # 一個前の状態変化はいつか？
 # 状態変化に対するメッセージ。
 def last_value_is_edge(values):
-    msg = None
+    c_state = state_temp(values[0]['value'])
+    p_state = state_temp(values[1]['value'])
 
-    edge_time = []
+    if c_state is p_state:
+        return False, None
+    else:
+        if c_state is TempState.HIGH:
+            return True, MSG_HIGH + "{%.2f}C".float(values[0]['value'])
+        elif c_state is TempState.LOW:
+            return True, MSG_LOW + "{%.2f}C".float(values[0]['value'])
+        else:
+            return True, MSG_NOM + "{%.2f}C".float(values[0]['value'])
+
+def gen_edge_list(values):
+    edge_list = []
     previous_temp = None
     for v in values:
         current_temp = float(v['value'])  # 今の温度
@@ -85,24 +115,12 @@ def last_value_is_edge(values):
             p_state = state_temp(previous_temp)  # 前の状態
             c_state = state_temp(current_temp)   # 今の状態
             if p_state is not c_state:  # 前の状態と今の状態が違っていたら
-                edge_time.append(dateutil.parser.parse(v['timestamp']))   # いつのだったのか記録
-                if msg is None and c_state is TempState.NORMAL:
-                    msg = "Return to Normal"
-                elif msg is None and c_state is TempState.LOW:
-                    msg = "Temperature is TOO LOW"
-                elif msg is None and c_state is TempState.HIGH:
-                    msg = "Temperature is TOO HIGH"
+                edge_list.append(v)   # いつのだったのか記録
             else:
                 pass
         previous_temp = current_temp
 
-    flag = edge_time[0] is dateutil.parser.parse(values[1]['timestamp']) # 最新データがエッジか？
-    previous_edge = datetime.date.min  # 一番古い時間。
-    if flag is True:
-        if len(edge_time) > 1:
-            previous_edge = edge_time[1]
-
-    return flag, previous_edge, msg
+    return edge_list
 
 
 if __name__ == '__main__':
