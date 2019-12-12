@@ -18,7 +18,7 @@ MSG_NOM = "Temperature return to NORMAL. "
 app = Flask(__name__)
 
 
-@app.route('/check_temp', methods=['GET'])
+@app.route('/check_temp', methods=['POST'])
 def check_temp():
     # テストデータの受取
     response_json = request.get_json()
@@ -48,17 +48,20 @@ def message_gen(values):
     c_state = state_temp(float(values[0]['value']))
     if f_last_value_is_edge is True:  # 状態遷移があった場合
         edge_list = gen_edge_list(values)
-        edge_duration = dateutil.parser(edge_list[0]['timestamp']) - dateutil.parser(edge_list[1]['timestamp'])
-        if edge_duration > datetime.timedelta(hours=1) : # 前回の状態遷移から1時間以上空いていた場合
+        old_edge = dateutil.parser.parse(edge_list[1]['timestamp'])
+        new_edge = dateutil.parser.parse(edge_list[0]['timestamp'])
+        edge_duration = new_edge - old_edge
+        if edge_duration > datetime.timedelta(hours=1):  # 前回の状態遷移から1時間以上空いていた場合
             return edge_message
     elif c_state is not TempState.NORMAL:       # 異常状態にいる場合
         duration = wrong_range_duration(values)
         onehour = datetime.timedelta(hours=1)
-        if (duration % onehour) < datetime.timedelta(minutes=8):
+        if (duration % onehour) < datetime.timedelta(minutes=8) or \
+                (duration % onehour) > datetime.timedelta(minutes=52):  #  60分プラスマイナス8分
             if c_state is TempState.LOW:
-                return MSG_LOW + "{%.2f}C".float(values[0]['value'])
+                return MSG_LOW + "{:.2f}C".format(float(values[0]['value']))
             elif c_state is TempState.HIGH:
-                return MSG_HIGH + "{%.2f}C".float(values[0]['value'])
+                return MSG_HIGH + "{:.2f}C".format(float(values[0]['value']))
             else:
                 return "ERROR: 2000"
     else:
@@ -67,11 +70,11 @@ def message_gen(values):
 # 不正な状態にどれだけ継続しているか？
 #
 def wrong_range_duration(values):
-    now = datetime.datetime.now()
+    now = dateutil.parser.parse(values[0]['timestamp'])
     for v in values:
         state = state_temp(float(v['value']))
         if state is TempState.NORMAL:
-            return now - dateutil.parser(v['timestamp'])
+            return now - dateutil.parser.parse(v['timestamp'])
 
 # 温度状態に関する標準関数軍
 def low_temp(temp):
@@ -100,11 +103,12 @@ def last_value_is_edge(values):
         return False, None
     else:
         if c_state is TempState.HIGH:
-            return True, MSG_HIGH + "{%.2f}C".float(values[0]['value'])
+            return True, MSG_HIGH + "{:.2f}C".format(float(values[0]['value']))
         elif c_state is TempState.LOW:
-            return True, MSG_LOW + "{%.2f}C".float(values[0]['value'])
+            return True, MSG_LOW + '{:.2f}C'.format(float(values[0]['value']))
         else:
-            return True, MSG_NOM + "{%.2f}C".float(values[0]['value'])
+            return True, MSG_NOM + "{:.2f}C".format(float(values[0]['value']))
+
 
 def gen_edge_list(values):
     edge_list = []
