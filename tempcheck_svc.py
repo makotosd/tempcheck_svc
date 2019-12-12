@@ -26,7 +26,7 @@ def check_temp():
     if response_json is None:
         # 温度履歴を取得
         response = requests.get(
-            'http://192.168.1.100:8081/m2x_temperature'
+            'http://m2x:8081/m2x_temperature'
         )
         response_json = response.json()
 
