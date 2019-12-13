@@ -4,12 +4,15 @@ from flask import Flask, jsonify, request
 import datetime
 import dateutil.parser
 from enum import Enum
+
+
 class TempState(Enum):
     LOW = 1
     NORMAL = 2
     HIGH = 3
 
-LOW_TEMP = 22
+
+LOW_TEMP = 20
 HIGH_TEMP = 35
 MSG_LOW = "Temperature is too LOW. "
 MSG_HIGH = "Temperature is too HIGH. "
