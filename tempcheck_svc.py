@@ -1,5 +1,7 @@
 # coding utf-8
 import requests
+import logging
+import logging.handlers
 from flask import Flask, jsonify, request
 import datetime
 from enum import Enum
@@ -21,26 +23,50 @@ preStatus = None
 preStatusStart = None
 preMsgTime = None
 
+DEVOPS='DEV'
+if DEVOPS is 'DEV':
+    M2X_SVC = 'http://192.168.1.100:8081/m2x_temperature'
+else:
+    M2X_SVC = 'http://m2x:8080/m2x_temperature'
+
 app = Flask(__name__)
+
+# Add RotatingFileHandler to Flask Logger
+handler = logging.handlers.RotatingFileHandler("test.log", "a+", maxBytes=30000, backupCount=5)
+handler.setLevel(logging.INFO)
+handler.setFormatter(logging.Formatter('[%(asctime)s] %(levelname)s in %(module)s: %(message)s'))
+app.logger.addHandler(handler)
 
 
 @app.route('/check_temp', methods=['POST'])
 def check_temp():
+    app.logger.info("check_temp called.")
+
     # テストデータの受取
     response_json = request.get_json()
 
     if response_json is None:
-        # 温度履歴を取得
-        response = requests.get(
-            # 'http://m2x:8080/m2x_temperature'
-            'http://192.168.1.100:8081/m2x_temperature'
-        )
-        response_json = response.json()
+        try:
+            # 温度履歴を取得
+            response = requests.get(
+                url=M2X_SVC,
+                timeout=(10, 30)
+            )
+
+        except requests.exceptions.ConnectTimeout:
+            app.logger.error('Timeout for M2X server')
+            return jsonify({'message': None})
+
+        else:
+            response_json = response.json()
+    else:
+        pass
 
     values = response_json['values']
 
     # 温度履歴をもとに、メッセージを作成
     message = message_gen(values)
+    app.logger.info("message is %s", message)
     ret = {
         'message': message
     }
@@ -56,10 +82,17 @@ def message_gen(values):
     c_temp = float(values[0]['value'])
     c_status = state_temp2(c_temp, preStatus)
 
+    if preStatus is not None:
+        app.logger.debug("preStatus is %s", preStatus.name)
+        app.logger.debug("preStatus starts %s", preStatusStart.strftime("%d/%m/%Y %H:%M:%S"))
+        app.logger.debug("preMsgTime is %s", preMsgTime.strftime("%d/%m/%Y %H:%M:%S"))
+        app.logger.debug("temperature is {}".format(c_temp))
+        app.logger.debug("c_status is " + c_status.name)
+
     msg = None
 
     if preStatus is None:
-        preStatus is c_status
+        preStatus = c_status
         preStatusStart = datetime.datetime.now()
         preMsgTime = datetime.datetime.now()
         msg = "ぴよ！げんき？"
@@ -69,11 +102,16 @@ def message_gen(values):
         preStatus = c_status
         preStatusStart = datetime.datetime.now()
         preMsgTime = None
+        app.logger.debug("state changed")
 
     else:  # 状態遷移なし
+        app.logger.debug("no state change")
+
         now = datetime.datetime.now()
         if now - preStatusStart > datetime.timedelta(hours=1.0):
-            if now - preMsgTime > datetime.deltatime(hours=1.0):
+            app.logger.debug("one hour passed from previous state change.")
+            if now - preMsgTime > datetime.timedelta(hours=1.0):
+                app.logger.debug("one hour passed from previous message.")
                 preMsgTime = now
                 msg = get_msg(c_status, c_temp)
             else:
