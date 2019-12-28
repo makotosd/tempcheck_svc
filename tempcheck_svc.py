@@ -23,19 +23,22 @@ preStatus = None
 preStatusStart = None
 preMsgTime = None
 
-DEVOPS='DEV'
-if DEVOPS is 'DEV':
+app = Flask(__name__)
+
+
+if app.config['ENV'] == "development":
     M2X_SVC = 'http://192.168.1.100:8081/m2x_temperature'
 else:
     M2X_SVC = 'http://m2x:8080/m2x_temperature'
 
-app = Flask(__name__)
 
 # Add RotatingFileHandler to Flask Logger
-handler = logging.handlers.RotatingFileHandler("test.log", "a+", maxBytes=30000, backupCount=5)
-handler.setLevel(logging.INFO)
+handler = logging.handlers.RotatingFileHandler("test.log", "a+", maxBytes=3000, backupCount=5)
+handler.setLevel(logging.DEBUG)
 handler.setFormatter(logging.Formatter('[%(asctime)s] %(levelname)s in %(module)s: %(message)s'))
 app.logger.addHandler(handler)
+# 下の行がないお、RotatingFileHandlerがWARNING以上しか出してくれなかった。
+app.logger.setLevel(logging.DEBUG)
 
 
 @app.route('/check_temp', methods=['POST'])
@@ -97,7 +100,7 @@ def message_gen(values):
         preMsgTime = datetime.datetime.now()
         msg = "ぴよ！げんき？"
 
-    elif preStatus is not c_status:  # 状態遷移あり
+    elif preStatus != c_status:  # 状態遷移あり
         msg = get_msg(c_status, c_temp)
         preStatus = c_status
         preStatusStart = datetime.datetime.now()
@@ -125,9 +128,9 @@ def message_gen(values):
 
 
 def get_msg(state, temp):
-    if state is TempState.HIGH:
+    if state == TempState.HIGH:
         msg = MSG_HIGH + ' {:.2f}C'.format(temp)
-    elif state is TempState.LOW:
+    elif state == TempState.LOW:
         msg = MSG_LOW + ' {:.2f}C'.format(temp)
     else:
         msg = MSG_NOM + ' {:.2f}C'.format(temp)
@@ -144,19 +147,19 @@ def state_temp2(t, p_state):
         else:
             return TempState.NORMAL
     else:
-        if p_state is TempState.LOW:
+        if p_state == TempState.LOW:
             if t < LOW_TEMP + DELTA_TEMP:
                 return TempState.LOW
             else:
                 return TempState.NORMAL
-        if p_state is TempState.NORMAL:
+        if p_state == TempState.NORMAL:
             if t < LOW_TEMP:
                 return TempState.LOW
             elif t > HIGH_TEMP:
                 return TempState.HIGH
             else:
                 return TempState.NORMAL
-        if p_state is TempState.HIGH:
+        if p_state == TempState.HIGH:
             if t > HIGH_TEMP - DELTA_TEMP:
                 return TempState.HIGH
             else:
@@ -164,5 +167,4 @@ def state_temp2(t, p_state):
 
 
 if __name__ == '__main__':
-    app.debug = True
-    app.run(host='0.0.0.0', port=8080)
+    app.run(host='0.0.0.0', port=8080, debug=True)
