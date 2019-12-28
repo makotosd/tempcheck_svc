@@ -33,7 +33,7 @@ else:
 
 
 # Add RotatingFileHandler to Flask Logger
-handler = logging.handlers.RotatingFileHandler("test.log", "a+", maxBytes=3000, backupCount=5)
+handler = logging.handlers.RotatingFileHandler("tempcheck.log", "a+", maxBytes=30000, backupCount=5)
 handler.setLevel(logging.DEBUG)
 handler.setFormatter(logging.Formatter('[%(asctime)s] %(levelname)s in %(module)s: %(message)s'))
 app.logger.addHandler(handler)
