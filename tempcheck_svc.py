@@ -43,7 +43,7 @@ app.logger.setLevel(logging.DEBUG)
 
 @app.route('/check_temp', methods=['POST'])
 def check_temp():
-    app.logger.info("check_temp called.")
+    app.logger.info("check_temp called. --------------------------------------------")
 
     # テストデータの受取
     response_json = request.get_json()
@@ -93,25 +93,25 @@ def message_gen(values):
         app.logger.debug("c_status is " + c_status.name)
 
     msg = None
+    now = datetime.datetime.now()
 
     if preStatus is None:
         preStatus = c_status
-        preStatusStart = datetime.datetime.now()
-        preMsgTime = datetime.datetime.now()
+        preStatusStart = now
+        preMsgTime = now
         msg = "ぴよ！げんき？"
 
     elif preStatus != c_status:  # 状態遷移あり
         msg = get_msg(c_status, c_temp)
         preStatus = c_status
-        preStatusStart = datetime.datetime.now()
-        preMsgTime = None
+        preStatusStart = now
+        preMsgTime = now
         app.logger.debug("state changed")
 
     else:  # 状態遷移なし
         app.logger.debug("no state change")
 
         if c_status != TempState.NORMAL:  # NORMAL以外の場合
-            now = datetime.datetime.now()
             if now - preStatusStart > datetime.timedelta(hours=1.0):
                 app.logger.debug("one hour passed from previous state change.")
                 if now - preMsgTime > datetime.timedelta(hours=1.0):
