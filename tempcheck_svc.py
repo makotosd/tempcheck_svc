@@ -110,17 +110,20 @@ def message_gen(values):
     else:  # 状態遷移なし
         app.logger.debug("no state change")
 
-        now = datetime.datetime.now()
-        if now - preStatusStart > datetime.timedelta(hours=1.0):
-            app.logger.debug("one hour passed from previous state change.")
-            if now - preMsgTime > datetime.timedelta(hours=1.0):
-                app.logger.debug("one hour passed from previous message.")
-                preMsgTime = now
-                msg = get_msg(c_status, c_temp)
+        if c_status != TempState.NORMAL:  # NORMAL以外の場合
+            now = datetime.datetime.now()
+            if now - preStatusStart > datetime.timedelta(hours=1.0):
+                app.logger.debug("one hour passed from previous state change.")
+                if now - preMsgTime > datetime.timedelta(hours=1.0):
+                    app.logger.debug("one hour passed from previous message.")
+                    preMsgTime = now
+                    msg = get_msg(c_status, c_temp)
+                else:
+                    pass  # 前の通知から1H今んなので、何もしない
             else:
-                pass
+                pass      # 状態遷移から1H未満なので、何もしない
         else:
-            pass
+            pass          # NORMALなので何もしない
 
     preStatus = c_status
 
