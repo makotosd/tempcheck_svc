@@ -41,7 +41,7 @@ app.logger.addHandler(handler)
 app.logger.setLevel(logging.DEBUG)
 
 
-@app.route('/check_temp', methods=['POST'])
+@app.route('/check_temp', methods=['GET'])
 def check_temp():
     app.logger.info("check_temp called. --------------------------------------------")
 
