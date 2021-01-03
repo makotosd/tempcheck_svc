@@ -13,7 +13,7 @@ class TempState(Enum):
     HIGH = 3
 
 
-LOW_TEMP = 20.0
+LOW_TEMP = 16.0
 HIGH_TEMP = 35.0
 DELTA_TEMP = 1.0
 MSG_LOW = "じぇじぇじぇ、ちょっとすずしいなぁー. "
